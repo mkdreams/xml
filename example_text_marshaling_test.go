@@ -5,10 +5,11 @@
 package xml_test
 
 import (
-	"encoding/xml"
 	"fmt"
 	"log"
 	"strings"
+
+	"github.com/artukn/xml"
 )
 
 type Size int
