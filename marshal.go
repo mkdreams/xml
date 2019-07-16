@@ -135,11 +135,22 @@ func MarshalIndent(v interface{}, prefix, indent string) ([]byte, error) {
 // An Encoder writes XML data to an output stream.
 type Encoder struct {
 	p printer
+
+	// NamespacePrefix is used to generate xmlns prefixes from urls
+	NamespacePrefix func(url string, makeUnique func(prefix string) string) string
+}
+
+// IsName is a helper method for checking if a name can be used as an xml namespace prefix
+func IsName(s []byte) bool {
+	return isName(s)
 }
 
 // NewEncoder returns a new encoder that writes to w.
 func NewEncoder(w io.Writer) *Encoder {
-	e := &Encoder{printer{Writer: bufio.NewWriter(w)}}
+	e := &Encoder{
+		p:               printer{Writer: bufio.NewWriter(w)},
+		NamespacePrefix: DefaultNamespacePrefix,
+	}
 	e.p.encoder = e
 	return e
 }
@@ -315,6 +326,26 @@ type printer struct {
 	tags       []Name
 }
 
+// DefaultNamespacePrefix is the default of Encoder.NamespacePrefix. It uses the last part of the url path
+// if it's usable, or an underscore otherwise. If the prefix is already used for another url, a number is added.
+func DefaultNamespacePrefix(url string, makeUnique func(prefix string) string) string {
+	// Pick a name. We try to use the final element of the path
+	// but fall back to _.
+	prefix := strings.TrimRight(url, "/")
+	if i := strings.LastIndex(prefix, "/"); i >= 0 {
+		prefix = prefix[i+1:]
+	}
+	if prefix == "" || !IsName([]byte(prefix)) || strings.Contains(prefix, ":") {
+		prefix = "_"
+	}
+	if strings.HasPrefix(prefix, "xml") {
+		// xmlanything is reserved.
+		prefix = "_" + prefix
+	}
+
+	return makeUnique(prefix)
+}
+
 func (p *printer) getPrefix(url string) (prefix string, found bool) {
 	if prefix := p.attrPrefix[url]; prefix != "" {
 		return prefix, true
@@ -334,20 +365,11 @@ func (p *printer) getPrefix(url string) (prefix string, found bool) {
 		p.attrNS = make(map[string]string)
 	}
 
-	// Pick a name. We try to use the final element of the path
-	// but fall back to _.
-	prefix = strings.TrimRight(url, "/")
-	if i := strings.LastIndex(prefix, "/"); i >= 0 {
-		prefix = prefix[i+1:]
-	}
-	if prefix == "" || !isName([]byte(prefix)) || strings.Contains(prefix, ":") {
-		prefix = "_"
-	}
-	if strings.HasPrefix(prefix, "xml") {
-		// xmlanything is reserved.
-		prefix = "_" + prefix
-	}
-	if p.attrNS[prefix] != "" {
+	prefix = p.encoder.NamespacePrefix(url, func(prefix string) string {
+		if p.attrNS[prefix] == "" {
+			return prefix
+		}
+
 		// Name is taken. Find a better one.
 		for p.seq++; ; p.seq++ {
 			if id := prefix + "_" + strconv.Itoa(p.seq); p.attrNS[id] == "" {
@@ -355,7 +377,8 @@ func (p *printer) getPrefix(url string) (prefix string, found bool) {
 				break
 			}
 		}
-	}
+		return prefix
+	})
 
 	p.attrPrefix[url] = prefix
 	p.attrNS[prefix] = url
