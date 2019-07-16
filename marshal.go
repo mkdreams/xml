@@ -315,6 +315,71 @@ type printer struct {
 	tags       []Name
 }
 
+// tagWithPrefix finds the name space prefix attribute to use for the given name space,
+// defining a new prefix if necessary. It returns the tag name with prefix.
+func (p *printer) tagWithPrefix(name Name) string {
+	if name.Space == "" {
+		return name.Local
+	}
+	if prefix := p.attrPrefix[name.Space]; prefix != "" {
+		return prefix + ":" + name.Local
+	}
+
+	// The "http://www.w3.org/XML/1998/namespace" name space is predefined as "xml"
+	// and must be referred to that way.
+	// (The "http://www.w3.org/2000/xmlns/" name space is also predefined as "xmlns",
+	// but users should not be trying to use that one directly - that's our job.)
+	if name.Space == xmlURL {
+		return xmlPrefix + ":" + name.Local
+	}
+
+	// Need to define a new name space.
+	if p.attrPrefix == nil {
+		p.attrPrefix = make(map[string]string)
+		p.attrNS = make(map[string]string)
+	}
+
+	// Pick a name. We try to use the final element of the path
+	// but fall back to _.
+	prefix := strings.TrimRight(name.Space, "/")
+	if i := strings.LastIndex(prefix, "/"); i >= 0 {
+		prefix = prefix[i+1:]
+	}
+	if prefix == "" || !isName([]byte(prefix)) || strings.Contains(prefix, ":") {
+		prefix = "_"
+	}
+	if strings.HasPrefix(prefix, "xml") {
+		// xmlanything is reserved.
+		prefix = "_" + prefix
+	}
+	if p.attrNS[prefix] != "" {
+		// Name is taken. Find a better one.
+		for p.seq++; ; p.seq++ {
+			if id := prefix + "_" + strconv.Itoa(p.seq); p.attrNS[id] == "" {
+				prefix = id
+				break
+			}
+		}
+	}
+
+	p.attrPrefix[name.Space] = prefix
+	p.attrNS[prefix] = name.Space
+
+	p.prefixes = append(p.prefixes, prefix)
+
+	buf := &strings.Builder{}
+	buf.WriteString(prefix)
+	buf.WriteByte(':')
+	buf.WriteString(name.Local)
+	buf.WriteString(` xmlns:`)
+	buf.WriteString(prefix)
+	buf.WriteString(`="`)
+	EscapeText(buf, []byte(name.Space))
+	buf.WriteString(`"`)
+
+	return buf.String()
+}
+
 // createAttrPrefix finds the name space prefix attribute to use for the given name space,
 // defining a new prefix if necessary. It returns the prefix.
 func (p *printer) createAttrPrefix(url string) string {
@@ -693,13 +758,8 @@ func (p *printer) writeStart(start *StartElement) error {
 
 	p.writeIndent(1)
 	p.WriteByte('<')
-	p.WriteString(start.Name.Local)
 
-	if start.Name.Space != "" {
-		p.WriteString(` xmlns="`)
-		p.EscapeString(start.Name.Space)
-		p.WriteByte('"')
-	}
+	p.WriteString(p.tagWithPrefix(start.Name))
 
 	// Attributes
 	for _, attr := range start.Attr {
@@ -739,7 +799,7 @@ func (p *printer) writeEnd(name Name) error {
 	p.writeIndent(-1)
 	p.WriteByte('<')
 	p.WriteByte('/')
-	p.WriteString(name.Local)
+	p.WriteString(p.tagWithPrefix(name))
 	p.WriteByte('>')
 	p.popPrefix()
 	return nil

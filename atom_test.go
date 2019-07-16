@@ -26,7 +26,7 @@ var atomValue = &Feed{
 }
 
 var atomXML = `` +
-	`<feed xmlns="http://www.w3.org/2005/Atom" updated="2003-12-13T18:30:02Z">` +
+	`<Atom:feed xmlns:Atom="http://www.w3.org/2005/Atom" updated="2003-12-13T18:30:02Z">` +
 	`<title>Example Feed</title>` +
 	`<id>urn:uuid:60a76c80-d399-11d9-b93C-0003939e0af6</id>` +
 	`<link href="http://example.org/"></link>` +
@@ -39,7 +39,7 @@ var atomXML = `` +
 	`<author><name></name><uri></uri><email></email></author>` +
 	`<summary>Some text.</summary>` +
 	`</entry>` +
-	`</feed>`
+	`</Atom:feed>`
 
 func ParseTime(str string) time.Time {
 	t, err := time.Parse(time.RFC3339, str)
