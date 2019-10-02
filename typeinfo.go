@@ -64,8 +64,8 @@ func getTypeInfo(typ reflect.Type) (*typeInfo, error) {
 				continue // Private field
 			}
 
-			// For embedded structs, embed its fields.
-			if f.Anonymous {
+			// For embedded structs, embed its fields, but only if it doesn't have an xml name
+			if f.Anonymous && f.Tag.Get("xml") == "" {
 				t := f.Type
 				if t.Kind() == reflect.Ptr {
 					t = t.Elem()

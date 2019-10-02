@@ -148,7 +148,7 @@ func IsName(s []byte) bool {
 // NewEncoder returns a new encoder that writes to w.
 func NewEncoder(w io.Writer) *Encoder {
 	e := &Encoder{
-		p:               printer{Writer: bufio.NewWriter(w)},
+		p:               printer{Writer: bufio.NewWriter(w), boolFalse: "false", boolTrue: "true"},
 		NamespacePrefix: DefaultNamespacePrefix,
 	}
 	e.p.encoder = e
@@ -161,6 +161,13 @@ func NewEncoder(w io.Writer) *Encoder {
 func (enc *Encoder) Indent(prefix, indent string) {
 	enc.p.prefix = prefix
 	enc.p.indent = indent
+}
+
+// BoolValues sets the string used for encoding boolean false and true values.
+// Default is "false" and "true"
+func (enc *Encoder) BoolValues(boolFalse, boolTrue string) {
+	enc.p.boolFalse = boolFalse
+	enc.p.boolTrue = boolTrue
 }
 
 // Encode writes the XML encoding of v to the stream.
@@ -324,6 +331,8 @@ type printer struct {
 	attrPrefix map[string]string // map name space -> prefix
 	prefixes   []string
 	tags       []Name
+	boolFalse  string
+	boolTrue   string
 }
 
 // DefaultNamespacePrefix is the default of Encoder.NamespacePrefix. It uses the last part of the url path
@@ -806,7 +815,7 @@ func (p *printer) marshalSimple(typ reflect.Type, val reflect.Value) (string, []
 	case reflect.String:
 		return val.String(), nil, nil
 	case reflect.Bool:
-		return strconv.FormatBool(val.Bool()), nil, nil
+		return p.formatBool(val.Bool()), nil, nil
 	case reflect.Array:
 		if typ.Elem().Kind() != reflect.Uint8 {
 			break
@@ -904,7 +913,7 @@ func (p *printer) marshalStruct(tinfo *typeInfo, val reflect.Value) error {
 					return err
 				}
 			case reflect.Bool:
-				if err := emit(p, strconv.AppendBool(scratch[:0], vf.Bool())); err != nil {
+				if err := emit(p, p.appendBool(scratch[:0], vf.Bool())); err != nil {
 					return err
 				}
 			case reflect.String:
@@ -1078,6 +1087,10 @@ func (e *UnsupportedTypeError) Error() string {
 	return "xml: unsupported type: " + e.Type.String()
 }
 
+type EmptyChecker interface {
+	IsEmpty() bool
+}
+
 func isEmptyValue(v reflect.Value) bool {
 	switch v.Kind() {
 	case reflect.Array, reflect.Map, reflect.Slice, reflect.String:
@@ -1091,7 +1104,29 @@ func isEmptyValue(v reflect.Value) bool {
 	case reflect.Float32, reflect.Float64:
 		return v.Float() == 0
 	case reflect.Interface, reflect.Ptr:
-		return v.IsNil()
+		if v.IsNil() {
+			return true
+		}
+	}
+	if !v.CanInterface() {
+		return false
+	}
+	if eCheck, ok := v.Interface().(EmptyChecker); ok {
+		return eCheck.IsEmpty()
 	}
 	return false
+}
+
+func (p *printer) formatBool(b bool) string {
+	if b {
+		return p.boolTrue
+	}
+	return p.boolFalse
+}
+
+func (p *printer) appendBool(dst []byte, b bool) []byte {
+	if b {
+		return append(dst, p.boolTrue...)
+	}
+	return append(dst, p.boolFalse...)
 }
