@@ -575,6 +575,9 @@ func (p *printer) marshalValue(val reflect.Value, finfo *fieldInfo, startTemplat
 			continue
 		}
 		fv := finfo.value(val, dontInitNilPointers)
+		if !fv.IsValid() {
+			continue
+		}
 
 		if finfo.flags&fOmitEmpty != 0 && isEmptyValue(fv) {
 			continue
