@@ -312,6 +312,7 @@ func (d *Decoder) Token() (Token, error) {
 				v, ok := d.ns[a.Name.Local]
 				d.pushNs(a.Name.Local, v, ok)
 				d.ns[a.Name.Local] = a.Value
+				AttrNSPreNameMap[a.Value] = a.Name.Local
 			}
 			if a.Name.Space == "" && a.Name.Local == xmlnsPrefix {
 				// Default space for untagged names

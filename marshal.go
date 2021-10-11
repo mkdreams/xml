@@ -22,6 +22,8 @@ const (
 	Header = `<?xml version="1.0" encoding="UTF-8"?>` + "\n"
 )
 
+var AttrNSPreNameMap = make(map[string]string)
+
 // Marshal returns the XML encoding of v.
 //
 // Marshal handles an array or slice by marshaling each of the elements.
@@ -352,7 +354,12 @@ func DefaultNamespacePrefix(url string, makeUnique func(prefix string) string) s
 		prefix = "_" + prefix
 	}
 
-	return makeUnique(prefix)
+	if _, ok := AttrNSPreNameMap[url]; ok {
+		return AttrNSPreNameMap[url]
+	} else {
+		return makeUnique(prefix)
+	}
+
 }
 
 func (p *printer) getPrefix(url string) (prefix string, found bool) {
